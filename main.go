@@ -6,8 +6,8 @@ import (
 	"log"
 	"os"
 
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -23,8 +23,8 @@ func main() {
 
 	MONGODB_URL := os.Getenv("MONGODB_URL")
 	clientOptions := options.Client().ApplyURI(MONGODB_URL)
-	client, err := mongo.Connect(context.Background(), clientOptions)
 
+	client, err := mongo.Connect(context.Background(), clientOptions)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -36,15 +36,19 @@ func main() {
 		log.Fatal(err)
 	}
 
-	fmt.Println("Connected to Mongodb Successfully")
+	fmt.Println("Connected to MongoDB Successfully")
 
 	collection = client.Database("golang_db").Collection("todos")
 
-	app := fiber.New()
+	// ✅ Gin setup
+	app := gin.Default()
+
+	// ✅ CORS middleware for Gin
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "*",
-		AllowMethods: "GET,POST,PATCH,DELETE",
-		AllowHeaders: "Origin, Content-Type, Accept",
+		AllowOrigins:     []string{"*"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept"},
+		AllowCredentials: true,
 	}))
 
 	setupRoutes(app)
@@ -53,5 +57,7 @@ func main() {
 	if port == "" {
 		port = "5000"
 	}
-	app.Listen(":" + port)
+
+	// ✅ Correct for Gin
+	app.Run(":" + port)
 }

@@ -1,11 +1,11 @@
 package main
 
-import "github.com/gofiber/fiber/v2"
+import "github.com/gin-gonic/gin"
 
-func setupRoutes(app *fiber.App) {
-	app.Get("/api/todos", getTodos)
-	app.Post("/api/todos", createTodos)
-	app.Patch("/api/todos/:id", updateTodos)
-	app.Patch("/api/todos/:id/complete", completeTodo)
-	app.Delete("/api/todos/:id", deleteTodos)
+func setupRoutes(app *gin.Engine) {
+	app.GET("/api/todos", getTodos)
+	app.POST("/api/todos", createTodos)
+	app.PATCH("/api/todos/:id", updateTodos)
+	app.PATCH("/api/todos/:id/complete", completeTodo)
+	app.DELETE("/api/todos/:id", deleteTodos)
 }

@@ -2,49 +2,54 @@ package main
 
 import (
 	"context"
+	"net/http"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-func getTodos(c *fiber.Ctx) error {
+func getTodos(c *gin.Context) {
 	var todos []Todo
+
 	cursor, err := collection.Find(context.Background(), bson.M{})
 	if err != nil {
-		return err
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
-
 	defer cursor.Close(context.Background())
 
 	for cursor.Next(context.Background()) {
 		var todo Todo
 		if err := cursor.Decode(&todo); err != nil {
-			return err
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
 		}
 		todos = append(todos, todo)
 	}
 
-	return c.Status(200).JSON(fiber.Map{
+	c.JSON(http.StatusOK, gin.H{
 		"status":       "success",
 		"totalRecords": len(todos),
 		"data":         todos,
 	})
 }
 
-func createTodos(c *fiber.Ctx) error {
-	todo := new(Todo)
+func createTodos(c *gin.Context) {
+	var todo Todo
 
-	if err := c.BodyParser(todo); err != nil {
-		return err
+	if err := c.ShouldBindJSON(&todo); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
 	}
 
 	if todo.Body == "" {
-		return c.Status(400).JSON(fiber.Map{
+		c.JSON(http.StatusBadRequest, gin.H{
 			"status": "error",
 			"error":  "Todo body cannot be empty",
 		})
+		return
 	}
 
 	now := time.Now()
@@ -54,85 +59,111 @@ func createTodos(c *fiber.Ctx) error {
 
 	_, err := collection.InsertOne(context.Background(), todo)
 	if err != nil {
-		return err
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
 
-	return c.Status(201).JSON(fiber.Map{
+	c.JSON(http.StatusCreated, gin.H{
 		"status": "success",
 		"data":   todo,
 	})
 }
 
-func updateTodos(c *fiber.Ctx) error {
-	id := c.Params("id")
+func updateTodos(c *gin.Context) {
+	id := c.Param("id")
 	objectId, err := primitive.ObjectIDFromHex(id)
 
 	if err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": "Invalid todo ID"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid todo ID"})
+		return
 	}
 
 	var body struct {
 		Body string `json:"body"`
 	}
 
-	if err := c.BodyParser(&body); err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": "Invalid request body"})
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		return
 	}
 
 	if body.Body == "" {
-		return c.Status(400).JSON(fiber.Map{"error": "Todo body cannot be empty"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Todo body cannot be empty"})
+		return
 	}
 
 	filter := bson.M{"_id": objectId}
 	now := time.Now()
-	update := bson.M{"$set": bson.M{"body": body.Body, "updatedAt": now}}
+	update := bson.M{
+		"$set": bson.M{
+			"body":      body.Body,
+			"updatedAt": now,
+		},
+	}
 
 	result, err := collection.UpdateOne(context.Background(), filter, update)
 	if err != nil {
-		return err
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
+
 	if result.MatchedCount == 0 {
-		return c.Status(404).JSON(fiber.Map{"error": "todo not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "todo not found"})
+		return
 	}
-	return c.Status(200).JSON(fiber.Map{"success": true})
+
+	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
-func completeTodo(c *fiber.Ctx) error {
-	id := c.Params("id")
+func completeTodo(c *gin.Context) {
+	id := c.Param("id")
 	objectId, err := primitive.ObjectIDFromHex(id)
 
 	if err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": "Invalid todo ID"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid todo ID"})
+		return
 	}
 
 	filter := bson.M{"_id": objectId}
 	now := time.Now()
-	update := bson.M{"$set": bson.M{"completed": true, "updatedAt": now}}
+	update := bson.M{
+		"$set": bson.M{
+			"completed": true,
+			"updatedAt": now,
+		},
+	}
 
 	result, err := collection.UpdateOne(context.Background(), filter, update)
 	if err != nil {
-		return err
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
+
 	if result.MatchedCount == 0 {
-		return c.Status(404).JSON(fiber.Map{"error": "todo not found"})
+		c.JSON(http.StatusNotFound, gin.H{"error": "todo not found"})
+		return
 	}
-	return c.Status(200).JSON(fiber.Map{"success": true})
+
+	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
-func deleteTodos(c *fiber.Ctx) error {
-	id := c.Params("id")
+func deleteTodos(c *gin.Context) {
+	id := c.Param("id")
 	objectID, err := primitive.ObjectIDFromHex(id)
+
 	if err != nil {
-		return c.Status(400).JSON(fiber.Map{"error": "Invalid todo ID"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid todo ID"})
+		return
 	}
 
 	filter := bson.M{"_id": objectID}
 	result, err := collection.DeleteOne(context.Background(), filter)
 	if err != nil {
-		return err
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
 
-	return c.Status(200).JSON(fiber.Map{
+	c.JSON(http.StatusOK, gin.H{
 		"success":      true,
 		"deletedCount": result.DeletedCount,
 	})
